@@ -1,0 +1,14 @@
+# Python virtual environment ko chhod do
+.venv/
+backend_Civic/venv/
+__pycache__/
+*.pyc
+
+# Node.js ki bhaari files ko chhod do (Blockchain waali)
+contracts_Civic/node_modules/
+contracts_Civic/artifacts/
+contracts_Civic/cache/
+
+# System files
+.DS_Store
+Thumbs.db
