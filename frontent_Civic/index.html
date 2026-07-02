@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SecureCivic | Blockchain Land Registry MVP</title>
+	<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--navy: #1e3a8a;
+			--emerald: #047857;
+			--slate-ink: #0f172a;
+			--panel: rgba(255, 255, 255, 0.86);
+			--border: rgba(148, 163, 184, 0.24);
+			--shadow: 0 24px 80px rgba(15, 23, 42, 0.12);
+		}
+
+		html {
+			scroll-behavior: smooth;
+		}
+
+		body {
+			font-family: "Plus Jakarta Sans", sans-serif;
+			background:
+				radial-gradient(circle at top left, rgba(30, 58, 138, 0.14), transparent 28%),
+				radial-gradient(circle at top right, rgba(4, 120, 87, 0.12), transparent 26%),
+				linear-gradient(180deg, #f8fafc 0%, #eef4fb 48%, #f8fafc 100%);
+			color: var(--slate-ink);
+		}
+
+		.glass-panel {
+			background: var(--panel);
+			border: 1px solid var(--border);
+			box-shadow: var(--shadow);
+			backdrop-filter: blur(16px);
+		}
+
+		.screen {
+			opacity: 0;
+			transform: translateY(16px) scale(0.99);
+			pointer-events: none;
+			transition: opacity 280ms ease, transform 280ms ease;
+		}
+
+		.screen.is-active {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+			pointer-events: auto;
+		}
+
+		.screen-shell {
+			display: none;
+		}
+
+		.screen-shell.is-visible {
+			display: block;
+		}
+
+		.tab-button.is-active {
+			color: #0f172a;
+			background: rgba(255, 255, 255, 0.96);
+			border-color: rgba(148, 163, 184, 0.35);
+			box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+		}
+
+		.gradient-outline {
+			position: relative;
+			overflow: hidden;
+		}
+
+		.gradient-outline::before {
+			content: "";
+			position: absolute;
+			inset: 0;
+			border-radius: inherit;
+			padding: 1px;
+			background: linear-gradient(135deg, rgba(4, 120, 87, 0.8), rgba(30, 58, 138, 0.78));
+			-webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+			-webkit-mask-composite: xor;
+			mask-composite: exclude;
+			pointer-events: none;
+		}
+
+		.soft-grid {
+			background-image: linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+			background-size: 28px 28px;
+		}
+
+		.field {
+			width: 100%;
+			border: 1px solid rgba(148, 163, 184, 0.32);
+			border-radius: 1rem;
+			background: rgba(255, 255, 255, 0.92);
+			padding: 0.9rem 1rem;
+			transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+		}
+
+		.field:focus {
+			outline: none;
+			border-color: rgba(4, 120, 87, 0.5);
+			box-shadow: 0 0 0 4px rgba(4, 120, 87, 0.1);
+			transform: translateY(-1px);
+		}
+
+		.drop-zone {
+			border: 1.5px dashed rgba(30, 58, 138, 0.28);
+			background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(241,245,249,0.94));
+		}
+
+		.spinner {
+			width: 1.1rem;
+			height: 1.1rem;
+			border: 2px solid rgba(255,255,255,0.45);
+			border-top-color: white;
+			border-radius: 9999px;
+			animation: spin 0.8s linear infinite;
+		}
+
+		@keyframes spin {
+			to { transform: rotate(360deg); }
+		}
+
+		.timeline-line::before {
+			content: "";
+			position: absolute;
+			left: 14px;
+			top: 22px;
+			bottom: 22px;
+			width: 2px;
+			background: linear-gradient(180deg, rgba(148,163,184,0.55), rgba(4,120,87,0.55));
+		}
+
+		.audit-terminal {
+			background: linear-gradient(180deg, rgba(15,23,42,0.98), rgba(15,23,42,0.92));
+			color: #dbeafe;
+			border: 1px solid rgba(96, 165, 250, 0.22);
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			*, *::before, *::after {
+				animation-duration: 0.01ms !important;
+				animation-iteration-count: 1 !important;
+				transition-duration: 0.01ms !important;
+				scroll-behavior: auto !important;
+			}
+		}
+	</style>
+</head>
+<body class="min-h-screen text-slate-900">
+	<div class="fixed inset-0 -z-10 soft-grid opacity-60"></div>
+	<div class="fixed inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-slate-100/70 to-transparent"></div>
+
+	<main class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+		<section id="mainScreen" class="screen is-active flex-1">
+			<div class="glass-panel rounded-[2rem] border-white/60 p-5 sm:p-7 lg:p-8">
+				<header class="flex flex-col gap-4 border-b border-slate-200/80 pb-5 md:flex-row md:items-center md:justify-between">
+					<div class="flex items-center gap-3">
+						<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-900 to-blue-800 text-xl text-white shadow-lg shadow-blue-950/20">🏛️</div>
+						<div>
+							<div class="flex flex-wrap items-center gap-2">
+								<h1 class="text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">SecureCivic</h1>
+								<span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">MVP v1.0</span>
+							</div>
+							<p class="text-sm text-slate-600">Blockchain Land Registry Prototype</p>
+						</div>
+					</div>
+					<div class="flex items-center gap-3 self-start rounded-2xl border border-slate-200 bg-white/75 px-4 py-2 text-sm text-slate-600 shadow-sm md:self-auto">
+						<span class="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_6px_rgba(4,120,87,0.12)]"></span>
+						<span id="dateDisplay">Loading current date…</span>
+					</div>
+				</header>
+
+				<section class="grid gap-8 py-8 lg:grid-cols-[1.15fr_0.85fr] lg:py-10">
+					<div class="space-y-7">
+						<div class="inline-flex items-center gap-2 rounded-full border border-blue-200/80 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-900">
+							<span class="flex h-7 w-7 items-center justify-center rounded-full bg-blue-900 text-white">⛓️</span>
+							Government-grade trust layer for land governance
+						</div>
+						<div class="space-y-5">
+							<h2 class="max-w-3xl text-4xl font-black tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">Decentralized Land Governance and Registry Room</h2>
+							<p class="max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">Records are secured, immutable, and transparently logged on a blockchain ledger so citizens and registrars can move through registration and mutation workflows with confidence.</p>
+						</div>
+						<div class="flex flex-wrap gap-3 text-sm text-slate-600">
+							<span class="rounded-full border border-slate-200 bg-white/90 px-4 py-2 shadow-sm">Tamper-proof state</span>
+							<span class="rounded-full border border-slate-200 bg-white/90 px-4 py-2 shadow-sm">Role-based access</span>
+							<span class="rounded-full border border-slate-200 bg-white/90 px-4 py-2 shadow-sm">Audit-ready workflow</span>
+						</div>
+					</div>
+
+					<div class="grid gap-4 lg:justify-end">
+						<div class="rounded-[1.75rem] border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 p-5 shadow-lg shadow-emerald-950/5 transition-transform duration-300 hover:-translate-y-1">
+							<div class="flex items-center justify-between gap-4">
+								<div class="space-y-2">
+									<div class="flex items-center gap-2 text-emerald-800">
+										<span class="text-2xl">🌾</span>
+										<span class="text-sm font-bold uppercase tracking-[0.2em]">Citizen / Farmer Portal</span>
+									</div>
+									<p class="max-w-sm text-sm leading-6 text-slate-600">View land holdings, check mutations, apply for fresh registration.</p>
+								</div>
+								<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-900/15">01</div>
+							</div>
+							<button id="openCitizenBtn" class="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-emerald-700 px-4 py-3.5 text-sm font-bold text-white transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-200">Access Citizen Suite</button>
+						</div>
+
+						<div class="rounded-[1.75rem] border border-blue-200/80 bg-gradient-to-br from-blue-50 via-white to-blue-100/80 p-5 shadow-lg shadow-blue-950/5 transition-transform duration-300 hover:-translate-y-1">
+							<div class="flex items-center justify-between gap-4">
+								<div class="space-y-2">
+									<div class="flex items-center gap-2 text-blue-900">
+										<span class="text-2xl">⚖️</span>
+										<span class="text-sm font-bold uppercase tracking-[0.2em]">Land Registrar Console</span>
+									</div>
+									<p class="max-w-sm text-sm leading-6 text-slate-600">Review incoming registry requests, verify documentation, sign transactions on-chain.</p>
+								</div>
+								<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-900 text-white shadow-lg shadow-blue-900/15">02</div>
+							</div>
+							<button id="openRegistrarBtn" class="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-blue-900 px-4 py-3.5 text-sm font-bold text-white transition hover:bg-blue-950 focus:outline-none focus:ring-4 focus:ring-blue-200">Launch Officer Console</button>
+						</div>
+					</div>
+				</section>
+			</div>
+		</section>
+
+		<section id="citizenScreen" class="screen screen-shell flex-1">
+			<div class="glass-panel rounded-[2rem] border-white/60 p-4 sm:p-6 lg:p-8">
+				<div class="flex flex-col gap-4 border-b border-slate-200/80 pb-5 lg:flex-row lg:items-center lg:justify-between">
+					<div class="flex items-center gap-3">
+						<button data-back-to-main class="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:text-slate-950">← Back to Main Portal</button>
+						<div>
+							<h2 class="text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">Citizen / Farmer Dashboard</h2>
+							<p class="text-sm text-slate-600">Manage assets, submit mutation requests, and track every stage.</p>
+						</div>
+					</div>
+					<div class="inline-flex items-center gap-2 self-start rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm lg:self-auto">
+						<span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+						<span>Shrestha - Farmer ID: #4402</span>
+					</div>
+				</div>
+
+				<div class="mt-6 flex flex-wrap gap-3">
+					<button data-citizen-tab="assets" class="tab-button is-active rounded-2xl border border-slate-200 bg-white/70 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:text-slate-900">My Assets</button>
+					<button data-citizen-tab="mutation" class="tab-button rounded-2xl border border-slate-200 bg-white/70 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:text-slate-900">New Mutation Request</button>
+					<button data-citizen-tab="tracker" class="tab-button rounded-2xl border border-slate-200 bg-white/70 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:text-slate-900">Application Tracker</button>
+				</div>
+
+				<div class="mt-6">
+					<div data-citizen-panel="assets" class="space-y-5">
+						<div class="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+							<div class="mb-4 flex items-center justify-between gap-3">
+								<div>
+									<h3 class="text-lg font-bold text-slate-950">Land Holdings</h3>
+									<p class="text-sm text-slate-500">Verified properties linked to the wallet profile.</p>
+								</div>
+								<span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">2 active assets</span>
+							</div>
+							<div class="overflow-x-auto">
+								<table class="min-w-full divide-y divide-slate-200 text-left">
+									<thead class="text-xs uppercase tracking-[0.2em] text-slate-500">
+										<tr>
+											<th class="py-3 pr-4 font-semibold">Asset ID</th>
+											<th class="py-3 pr-4 font-semibold">Local Survey No</th>
+											<th class="py-3 pr-4 font-semibold">Area (Hectares)</th>
+											<th class="py-3 pr-4 font-semibold">Land Type</th>
+											<th class="py-3 pr-4 font-semibold">Current Status</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-slate-100 text-sm text-slate-700">
+										<tr class="transition hover:bg-slate-50/80">
+											<td class="py-4 pr-4 font-semibold text-slate-900">1092</td>
+											<td class="py-4 pr-4">LS-44/18</td>
+											<td class="py-4 pr-4">1.84</td>
+											<td class="py-4 pr-4">Agricultural</td>
+											<td class="py-4 pr-4"><span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Verified</span></td>
+										</tr>
+										<tr class="transition hover:bg-slate-50/80">
+											<td class="py-4 pr-4 font-semibold text-slate-900">1187</td>
+											<td class="py-4 pr-4">LS-44/21</td>
+											<td class="py-4 pr-4">0.92</td>
+											<td class="py-4 pr-4">Commercial</td>
+											<td class="py-4 pr-4"><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">Locked</span></td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+
+					<div data-citizen-panel="mutation" class="hidden space-y-5">
+						<div class="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+							<div class="mb-5 space-y-2">
+								<h3 class="text-lg font-bold text-slate-950">New Mutation Request</h3>
+								<p class="text-sm text-slate-500">Prepare a structured land registration submission with supporting proof.</p>
+							</div>
+
+							<form id="mutationForm" class="grid gap-4 lg:grid-cols-2">
+								<label class="space-y-2 lg:col-span-1">
+									<span class="text-sm font-semibold text-slate-700">Land ID / Survey No</span>
+									<input class="field" type="text" name="landId" placeholder="LS-44/25">
+								</label>
+								<label class="space-y-2 lg:col-span-1">
+									<span class="text-sm font-semibold text-slate-700">Owner Full Name</span>
+									<input class="field" type="text" name="ownerName" placeholder="Shrestha Devi">
+								</label>
+								<label class="space-y-2 lg:col-span-1">
+									<span class="text-sm font-semibold text-slate-700">Aadhaar / Wallet Public Address</span>
+									<input class="field" type="text" name="wallet" placeholder="0xB4A1...9C22 or 1234 5678 9012">
+								</label>
+								<label class="space-y-2 lg:col-span-1">
+									<span class="text-sm font-semibold text-slate-700">Land Valuation (INR)</span>
+									<input class="field" type="number" name="valuation" placeholder="1850000">
+								</label>
+								<div class="space-y-2 lg:col-span-2">
+									<span class="text-sm font-semibold text-slate-700">Document Upload</span>
+									<div class="drop-zone flex min-h-40 flex-col items-center justify-center rounded-[1.5rem] px-6 py-8 text-center">
+										<div class="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-900 text-2xl text-white shadow-lg shadow-blue-900/10">📄</div>
+										<p class="text-sm font-semibold text-slate-900">Drag and drop documents here</p>
+										<p class="mt-1 text-sm text-slate-500">Sale deed, Khatian, utility proof, and supporting maps</p>
+										<span class="mt-4 inline-flex rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-900">PDF, JPG, PNG</span>
+									</div>
+								</div>
+
+								<div class="lg:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+									<button id="submitMutationBtn" type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-700 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-200">
+										<span class="btn-label">Submit Registration Request</span>
+										<span class="btn-spinner hidden ml-3 spinner"></span>
+									</button>
+									<div id="mutationSuccess" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Success Alert: Your registration request has been submitted and queued for review.</div>
+								</div>
+							</form>
+						</div>
+					</div>
+
+					<div data-citizen-panel="tracker" class="hidden space-y-5">
+						<div class="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+							<div class="mb-5">
+								<h3 class="text-lg font-bold text-slate-950">Application Tracker</h3>
+								<p class="text-sm text-slate-500">Follow the mutation lifecycle from submission to ledger update.</p>
+							</div>
+							<div class="relative timeline-line space-y-4 pl-10">
+								<div class="relative rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
+									<div class="absolute -left-[2.125rem] top-5 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white shadow-lg shadow-emerald-900/10">✓</div>
+									<div class="flex items-center justify-between gap-3">
+										<h4 class="font-bold text-slate-950">Step 1: Application Submitted</h4>
+										<span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">Completed</span>
+									</div>
+									<p class="mt-1 text-sm text-slate-600">The request has been captured and routed to the queue.</p>
+								</div>
+								<div class="relative rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
+									<div class="absolute -left-[2.125rem] top-5 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white shadow-lg shadow-emerald-900/10">✓</div>
+									<div class="flex items-center justify-between gap-3">
+										<h4 class="font-bold text-slate-950">Step 2: Local Patwari Verification</h4>
+										<span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">Completed</span>
+									</div>
+									<p class="mt-1 text-sm text-slate-600">Field-level verification has been successfully recorded.</p>
+								</div>
+								<div class="relative rounded-2xl border border-slate-200 bg-slate-50 p-4">
+									<div class="absolute -left-[2.125rem] top-5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-sm font-bold text-white shadow-lg shadow-slate-900/10">3</div>
+									<div class="flex items-center justify-between gap-3">
+										<h4 class="font-bold text-slate-950">Step 3: Registrar Digital Signature</h4>
+										<span class="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">Pending</span>
+									</div>
+									<p class="mt-1 text-sm text-slate-600">Awaiting registrar review and on-chain approval.</p>
+								</div>
+								<div class="relative rounded-2xl border border-slate-200 bg-slate-50 p-4">
+									<div class="absolute -left-[2.125rem] top-5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-sm font-bold text-white shadow-lg shadow-slate-900/10">4</div>
+									<div class="flex items-center justify-between gap-3">
+										<h4 class="font-bold text-slate-950">Step 4: Block Minting & Ledger Update</h4>
+										<span class="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">Pending</span>
+									</div>
+									<p class="mt-1 text-sm text-slate-600">Final ledger mutation will be sealed after signature.</p>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section id="registrarScreen" class="screen screen-shell flex-1">
+			<div class="glass-panel rounded-[2rem] border-white/60 p-4 sm:p-6 lg:p-8">
+				<div class="flex flex-col gap-4 border-b border-slate-200/80 pb-5 lg:flex-row lg:items-center lg:justify-between">
+					<div class="flex items-center gap-3">
+						<button data-back-to-main class="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:text-slate-950">← Exit Console</button>
+						<div>
+							<h2 class="text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">Registrar Dashboard</h2>
+							<p class="text-sm text-slate-600">Verify cases, approve records, and seal registry entries on-chain.</p>
+						</div>
+					</div>
+					<div class="inline-flex items-center gap-2 self-start rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-900 shadow-sm lg:self-auto">
+						<span class="h-2.5 w-2.5 rounded-full bg-blue-700"></span>
+						<span>Registrar Desk - District Core</span>
+					</div>
+				</div>
+
+				<div class="mt-6 grid gap-4 md:grid-cols-3">
+					<div class="rounded-[1.5rem] border border-blue-200/70 bg-white p-5 shadow-sm">
+						<p class="text-sm font-semibold text-slate-500">Pending Approvals</p>
+						<div id="pendingApprovalsCount" class="mt-2 text-4xl font-black tracking-tight text-blue-900">3</div>
+						<p class="mt-2 text-sm text-slate-600">Requests awaiting document inspection.</p>
+					</div>
+					<div class="rounded-[1.5rem] border border-emerald-200/70 bg-white p-5 shadow-sm">
+						<p class="text-sm font-semibold text-slate-500">On-Chain Sealed Records</p>
+						<div class="mt-2 text-4xl font-black tracking-tight text-emerald-700">142</div>
+						<p class="mt-2 text-sm text-slate-600">Immutable registry entries confirmed.</p>
+					</div>
+					<div class="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+						<p class="text-sm font-semibold text-slate-500">Flagged Disputes</p>
+						<div class="mt-2 text-4xl font-black tracking-tight text-slate-900">0</div>
+						<p class="mt-2 text-sm text-slate-600">No active disputes requiring escalation.</p>
+					</div>
+				</div>
+
+				<div class="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+					<section class="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+						<div class="mb-4 flex items-center justify-between gap-3">
+							<div>
+								<h3 class="text-lg font-bold text-slate-950">Verification Queue</h3>
+								<p class="text-sm text-slate-500">Review incoming citizen requests and approve valid records.</p>
+							</div>
+							<span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-blue-900">Live queue</span>
+						</div>
+						<div class="overflow-x-auto">
+							<table class="min-w-full divide-y divide-slate-200 text-left">
+								<thead class="text-xs uppercase tracking-[0.18em] text-slate-500">
+									<tr>
+										<th class="py-3 pr-4 font-semibold">Request ID</th>
+										<th class="py-3 pr-4 font-semibold">Applicant</th>
+										<th class="py-3 pr-4 font-semibold">Asset Details</th>
+										<th class="py-3 pr-4 font-semibold">Actions</th>
+									</tr>
+								</thead>
+								<tbody id="queueBody" class="divide-y divide-slate-100 text-sm text-slate-700"></tbody>
+							</table>
+						</div>
+					</section>
+
+					<section class="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+						<div class="mb-4">
+							<h3 class="text-lg font-bold text-slate-950">Immutable Audit Log</h3>
+							<p class="text-sm text-slate-500">Historical transaction trail for sealed record operations.</p>
+						</div>
+						<div class="audit-terminal rounded-[1.5rem] p-4 shadow-inner">
+							<div class="mb-3 flex items-center justify-between border-b border-white/10 pb-3 text-xs uppercase tracking-[0.22em] text-blue-200/80">
+								<span>Audit Terminal</span>
+								<span>Read-only</span>
+							</div>
+							<div class="space-y-3 text-sm leading-7 text-slate-100">
+								<div class="rounded-2xl bg-white/5 px-4 py-3">Timestamp | Block #98221 | Land ID 1092 transferred to Amit Kumar | Tx Hash: 0x7a8c...92f1</div>
+								<div class="rounded-2xl bg-white/5 px-4 py-3">Timestamp | Block #98204 | Land ID 1187 locked for mutation review | Tx Hash: 0x3fb1...4eaa</div>
+								<div class="rounded-2xl bg-white/5 px-4 py-3">Timestamp | Block #98176 | Registrar signature confirmed for request RQ-4402 | Tx Hash: 0xad18...0bc2</div>
+								<div class="rounded-2xl bg-white/5 px-4 py-3">Timestamp | Block #98112 | Land ID 1035 metadata anchored to IPFS hash | Tx Hash: 0xc8fe...d11a</div>
+							</div>
+						</div>
+					</section>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<div id="overlay" class="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-slate-950/45 opacity-0 backdrop-blur-sm transition-opacity duration-200">
+		<div class="glass-panel flex items-center gap-4 rounded-[1.75rem] px-6 py-5 text-slate-950 shadow-2xl shadow-slate-950/30">
+			<div class="spinner h-5 w-5 border-slate-300 border-t-blue-900"></div>
+			<div>
+				<p id="overlayTitle" class="text-base font-bold">Processing...</p>
+				<p id="overlaySubtitle" class="text-sm text-slate-600">Please wait while the action completes.</p>
+			</div>
+		</div>
+	</div>
+
+	<div id="toastHost" class="fixed bottom-4 right-4 z-50 space-y-3"></div>
+
+	<script>
+		const state = {
+			screen: 'main',
+			citizenTab: 'assets',
+			isSubmittingMutation: false,
+			queue: [
+				{ id: 'RQ-4402', applicant: 'Shrestha Devi', asset: 'Survey LS-44/25 • 1.10 Ha • Agricultural' },
+				{ id: 'RQ-4411', applicant: 'Amit Kumar', asset: 'Survey LS-12/08 • 0.74 Ha • Commercial' },
+				{ id: 'RQ-4435', applicant: 'Neelam Rani', asset: 'Survey LS-19/02 • 2.05 Ha • Agricultural' }
+			]
+		};
+
+		const elements = {
+			mainScreen: document.getElementById('mainScreen'),
+			citizenScreen: document.getElementById('citizenScreen'),
+			registrarScreen: document.getElementById('registrarScreen'),
+			openCitizenBtn: document.getElementById('openCitizenBtn'),
+			openRegistrarBtn: document.getElementById('openRegistrarBtn'),
+			dateDisplay: document.getElementById('dateDisplay'),
+			queueBody: document.getElementById('queueBody'),
+			pendingApprovalsCount: document.getElementById('pendingApprovalsCount'),
+			overlay: document.getElementById('overlay'),
+			overlayTitle: document.getElementById('overlayTitle'),
+			overlaySubtitle: document.getElementById('overlaySubtitle'),
+			toastHost: document.getElementById('toastHost'),
+			mutationForm: document.getElementById('mutationForm'),
+			submitMutationBtn: document.getElementById('submitMutationBtn'),
+			mutationSuccess: document.getElementById('mutationSuccess')
+		};
+
+		const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+		function formatDate() {
+			return new Intl.DateTimeFormat('en-IN', {
+				weekday: 'short',
+				day: '2-digit',
+				month: 'long',
+				year: 'numeric'
+			}).format(new Date());
+		}
+
+		function showToast(message, type = 'success') {
+			const toast = document.createElement('div');
+			const colors = type === 'success'
+				? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+				: 'border-blue-200 bg-blue-50 text-blue-900';
+			const dot = type === 'success' ? 'bg-emerald-600' : 'bg-blue-700';
+			toast.className = `min-w-80 max-w-md rounded-2xl border px-4 py-3 shadow-lg shadow-slate-950/10 ${colors}`;
+			toast.innerHTML = `
+				<div class="flex items-start gap-3">
+					<span class="mt-1 h-2.5 w-2.5 rounded-full ${dot}"></span>
+					<div>
+						<p class="text-sm font-bold">${message}</p>
+					</div>
+				</div>
+			`;
+			elements.toastHost.appendChild(toast);
+			setTimeout(() => {
+				toast.classList.add('opacity-0', 'translate-y-2');
+				toast.style.transition = 'opacity 220ms ease, transform 220ms ease';
+				setTimeout(() => toast.remove(), 240);
+			}, 2600);
+		}
+
+		function setActiveScreen(screen) {
+			state.screen = screen;
+			[elements.mainScreen, elements.citizenScreen, elements.registrarScreen].forEach((section) => {
+				const isTarget = section.id === `${screen}Screen`;
+				section.classList.toggle('screen-shell', screen !== 'main');
+				section.classList.toggle('is-visible', isTarget);
+				section.classList.toggle('is-active', isTarget);
+				section.setAttribute('aria-hidden', String(!isTarget));
+			});
+			if (screen === 'main') {
+				window.scrollTo({ top: 0, behavior: 'smooth' });
+			}
+		}
+
+		function setCitizenTab(tab) {
+			state.citizenTab = tab;
+			document.querySelectorAll('[data-citizen-tab]').forEach((button) => {
+				button.classList.toggle('is-active', button.dataset.citizenTab === tab);
+			});
+			document.querySelectorAll('[data-citizen-panel]').forEach((panel) => {
+				const isActive = panel.dataset.citizenPanel === tab;
+				panel.classList.toggle('hidden', !isActive);
+			});
+		}
+
+		function renderQueue() {
+			elements.pendingApprovalsCount.textContent = String(state.queue.length);
+
+			if (!state.queue.length) {
+				elements.queueBody.innerHTML = `
+					<tr>
+						<td colspan="4" class="py-10 text-center text-sm text-slate-500">Queue is currently empty.</td>
+					</tr>
+				`;
+				return;
+			}
+
+			elements.queueBody.innerHTML = state.queue.map((request) => `
+				<tr data-request-row="${request.id}" class="transition hover:bg-slate-50/80">
+					<td class="py-4 pr-4 font-semibold text-slate-900">${request.id}</td>
+					<td class="py-4 pr-4">${request.applicant}</td>
+					<td class="py-4 pr-4">${request.asset}</td>
+					<td class="py-4 pr-4">
+						<div class="flex flex-wrap gap-2">
+							<button data-action="review" data-request-id="${request.id}" class="rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-900 transition hover:bg-blue-100">Review Docs</button>
+							<button data-action="approve" data-request-id="${request.id}" class="rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-emerald-800">Approve &amp; Sign</button>
+						</div>
+					</td>
+				</tr>
+			`).join('');
+		}
+
+		function showOverlay(title, subtitle) {
+			elements.overlayTitle.textContent = title;
+			elements.overlaySubtitle.textContent = subtitle;
+			elements.overlay.classList.remove('pointer-events-none', 'opacity-0');
+			elements.overlay.classList.add('opacity-100');
+		}
+
+		function hideOverlay() {
+			elements.overlay.classList.add('pointer-events-none', 'opacity-0');
+			elements.overlay.classList.remove('opacity-100');
+		}
+
+		async function handleMutationSubmit(event) {
+			event.preventDefault();
+			if (state.isSubmittingMutation) {
+				return;
+			}
+
+			state.isSubmittingMutation = true;
+			elements.submitMutationBtn.disabled = true;
+			elements.submitMutationBtn.classList.add('opacity-90', 'cursor-wait');
+			elements.submitMutationBtn.querySelector('.btn-label').textContent = 'Submitting...';
+			elements.submitMutationBtn.querySelector('.btn-spinner').classList.remove('hidden');
+			elements.mutationSuccess.classList.add('hidden');
+
+			await delay(1000);
+
+			elements.submitMutationBtn.disabled = false;
+			elements.submitMutationBtn.classList.remove('opacity-90', 'cursor-wait');
+			elements.submitMutationBtn.querySelector('.btn-label').textContent = 'Submit Registration Request';
+			elements.submitMutationBtn.querySelector('.btn-spinner').classList.add('hidden');
+			elements.mutationSuccess.classList.remove('hidden');
+			showToast('Mutation request submitted successfully.', 'success');
+			state.isSubmittingMutation = false;
+		}
+
+		async function approveRequest(requestId) {
+			showOverlay('Generating Cryptographic Block Signature...', 'Sealing request and writing approval to the ledger.');
+			await delay(1000);
+			hideOverlay();
+			state.queue = state.queue.filter((request) => request.id !== requestId);
+			renderQueue();
+			showToast(`Request ${requestId} approved and sealed on-chain.`, 'success');
+		}
+
+		function reviewRequest(requestId) {
+			showToast(`Document review opened for ${requestId}.`, 'info');
+		}
+
+		document.addEventListener('click', async (event) => {
+			const backButton = event.target.closest('[data-back-to-main]');
+			if (backButton) {
+				setActiveScreen('main');
+				return;
+			}
+
+			const citizenButton = event.target.closest('#openCitizenBtn');
+			if (citizenButton) {
+				setActiveScreen('citizen');
+				setCitizenTab('assets');
+				return;
+			}
+
+			const registrarButton = event.target.closest('#openRegistrarBtn');
+			if (registrarButton) {
+				setActiveScreen('registrar');
+				return;
+			}
+
+			const tabButton = event.target.closest('[data-citizen-tab]');
+			if (tabButton) {
+				setCitizenTab(tabButton.dataset.citizenTab);
+				return;
+			}
+
+			const actionButton = event.target.closest('[data-action]');
+			if (actionButton) {
+				const requestId = actionButton.dataset.requestId;
+				if (actionButton.dataset.action === 'approve') {
+					actionButton.disabled = true;
+					await approveRequest(requestId);
+					return;
+				}
+				if (actionButton.dataset.action === 'review') {
+					reviewRequest(requestId);
+				}
+			}
+		});
+
+		elements.mutationForm.addEventListener('submit', handleMutationSubmit);
+
+		elements.dateDisplay.textContent = formatDate();
+		setActiveScreen('main');
+		setCitizenTab('assets');
+		renderQueue();
+	</script>
+</body>
+</html>
