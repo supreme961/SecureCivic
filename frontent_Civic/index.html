@@ -78,6 +78,7 @@
 			border-radius: inherit;
 			padding: 1px;
 			background: linear-gradient(135deg, rgba(4, 120, 87, 0.8), rgba(30, 58, 138, 0.78));
+			mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
 			-webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
 			-webkit-mask-composite: xor;
 			mask-composite: exclude;
@@ -472,15 +473,18 @@
 	<div id="toastHost" class="fixed bottom-4 right-4 z-50 space-y-3"></div>
 
 	<script>
+		const API_BASE = 'http://127.0.0.1:8000';
+
 		const state = {
 			screen: 'main',
 			citizenTab: 'assets',
-			isSubmittingMutation: false,
-			queue: [
-				{ id: 'RQ-4402', applicant: 'Shrestha Devi', asset: 'Survey LS-44/25 • 1.10 Ha • Agricultural' },
-				{ id: 'RQ-4411', applicant: 'Amit Kumar', asset: 'Survey LS-12/08 • 0.74 Ha • Commercial' },
-				{ id: 'RQ-4435', applicant: 'Neelam Rani', asset: 'Survey LS-19/02 • 2.05 Ha • Agricultural' }
-			]
+			assets: [],
+			requests: [],
+			queue: [],
+			auditLogs: [],
+			loadingCitizen: false,
+			loadingRegistrar: false,
+			submittingMutation: false
 		};
 
 		const elements = {
@@ -498,10 +502,11 @@
 			toastHost: document.getElementById('toastHost'),
 			mutationForm: document.getElementById('mutationForm'),
 			submitMutationBtn: document.getElementById('submitMutationBtn'),
-			mutationSuccess: document.getElementById('mutationSuccess')
+			mutationSuccess: document.getElementById('mutationSuccess'),
+			assetTableBody: document.querySelector('[data-citizen-panel="assets"] tbody'),
+			trackerPanel: document.querySelector('[data-citizen-panel="tracker"]'),
+			auditTerminalBody: document.querySelector('.audit-terminal .space-y-3')
 		};
-
-		const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 		function formatDate() {
 			return new Intl.DateTimeFormat('en-IN', {
@@ -512,18 +517,29 @@
 			}).format(new Date());
 		}
 
+		function escapeHtml(value) {
+			return String(value)
+				.replaceAll('&', '&amp;')
+				.replaceAll('<', '&lt;')
+				.replaceAll('>', '&gt;')
+				.replaceAll('"', '&quot;')
+				.replaceAll("'", '&#39;');
+		}
+
 		function showToast(message, type = 'success') {
 			const toast = document.createElement('div');
 			const colors = type === 'success'
 				? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-				: 'border-blue-200 bg-blue-50 text-blue-900';
-			const dot = type === 'success' ? 'bg-emerald-600' : 'bg-blue-700';
+				: type === 'error'
+					? 'border-rose-200 bg-rose-50 text-rose-900'
+					: 'border-blue-200 bg-blue-50 text-blue-900';
+			const dot = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-blue-700';
 			toast.className = `min-w-80 max-w-md rounded-2xl border px-4 py-3 shadow-lg shadow-slate-950/10 ${colors}`;
 			toast.innerHTML = `
 				<div class="flex items-start gap-3">
 					<span class="mt-1 h-2.5 w-2.5 rounded-full ${dot}"></span>
 					<div>
-						<p class="text-sm font-bold">${message}</p>
+						<p class="text-sm font-bold">${escapeHtml(message)}</p>
 					</div>
 				</div>
 			`;
@@ -555,13 +571,124 @@
 				button.classList.toggle('is-active', button.dataset.citizenTab === tab);
 			});
 			document.querySelectorAll('[data-citizen-panel]').forEach((panel) => {
-				const isActive = panel.dataset.citizenPanel === tab;
-				panel.classList.toggle('hidden', !isActive);
+				panel.classList.toggle('hidden', panel.dataset.citizenPanel !== tab);
 			});
 		}
 
-		function renderQueue() {
-			elements.pendingApprovalsCount.textContent = String(state.queue.length);
+		function ensureCitizenRequestsWidget() {
+			if (document.getElementById('citizenRequestsWidget')) {
+				return;
+			}
+
+			const widget = document.createElement('section');
+			widget.id = 'citizenRequestsWidget';
+			widget.className = 'rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm';
+			widget.innerHTML = `
+				<div class="mb-4 flex items-center justify-between gap-3">
+					<div>
+						<h3 class="text-lg font-bold text-slate-950">Mutation Requests</h3>
+						<p class="text-sm text-slate-500">Track citizen submissions and registrar decisions.</p>
+					</div>
+					<span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-700">Live feed</span>
+				</div>
+				<div class="overflow-x-auto">
+					<table class="min-w-full divide-y divide-slate-200 text-left">
+						<thead class="text-xs uppercase tracking-[0.2em] text-slate-500">
+							<tr>
+								<th class="py-3 pr-4 font-semibold">Request ID</th>
+								<th class="py-3 pr-4 font-semibold">Asset ID</th>
+								<th class="py-3 pr-4 font-semibold">Owner</th>
+								<th class="py-3 pr-4 font-semibold">Status</th>
+								<th class="py-3 pr-4 font-semibold">Updated</th>
+							</tr>
+						</thead>
+						<tbody id="citizenRequestsBody" class="divide-y divide-slate-100 text-sm text-slate-700"></tbody>
+					</table>
+				</div>
+			`;
+			elements.trackerPanel.prepend(widget);
+		}
+
+		function statusBadge(status) {
+			if (status === 'Verified' || status === 'Approved') {
+				return '<span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">' + escapeHtml(status) + '</span>';
+			}
+
+			if (status === 'Rejected') {
+				return '<span class="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Rejected</span>';
+			}
+
+			return '<span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">' + escapeHtml(status) + '</span>';
+		}
+
+		function renderCitizenAssets() {
+			if (!elements.assetTableBody) {
+				return;
+			}
+
+			if (!state.assets.length) {
+				elements.assetTableBody.innerHTML = `
+					<tr>
+						<td colspan="5" class="py-10 text-center text-sm text-slate-500">No assets available.</td>
+					</tr>
+				`;
+				return;
+			}
+
+			elements.assetTableBody.innerHTML = state.assets.map((asset) => `
+				<tr class="transition hover:bg-slate-50/80">
+					<td class="py-4 pr-4 font-semibold text-slate-900">${escapeHtml(asset.property_id)}</td>
+					<td class="py-4 pr-4">${escapeHtml(asset.location)}</td>
+					<td class="py-4 pr-4">${escapeHtml(asset.area)}</td>
+					<td class="py-4 pr-4">${escapeHtml(asset.property_type)}</td>
+					<td class="py-4 pr-4">${statusBadge(asset.status)}</td>
+				</tr>
+			`).join('');
+		}
+
+		function renderCitizenRequests() {
+			const requestsBody = document.getElementById('citizenRequestsBody');
+			if (!requestsBody) {
+				return;
+			}
+
+			if (!state.requests.length) {
+				requestsBody.innerHTML = `
+					<tr>
+						<td colspan="5" class="py-10 text-center text-sm text-slate-500">No mutation requests yet.</td>
+					</tr>
+				`;
+				return;
+			}
+
+			requestsBody.innerHTML = state.requests.map((request) => `
+				<tr class="transition hover:bg-slate-50/80">
+					<td class="py-4 pr-4 font-semibold text-slate-900">${escapeHtml(request.request_id)}</td>
+					<td class="py-4 pr-4">${escapeHtml(request.asset_id)}</td>
+					<td class="py-4 pr-4">${escapeHtml(request.owner_name)}</td>
+					<td class="py-4 pr-4">${statusBadge(request.status)}</td>
+					<td class="py-4 pr-4">${escapeHtml(request.updated_at || request.created_at || '')}</td>
+				</tr>
+			`).join('');
+		}
+
+		function renderAuditLogs() {
+			if (!elements.auditTerminalBody) {
+				return;
+			}
+
+			if (!state.auditLogs.length) {
+				elements.auditTerminalBody.innerHTML = '<div class="rounded-2xl bg-white/5 px-4 py-3">No audit logs available.</div>';
+				return;
+			}
+
+			elements.auditTerminalBody.innerHTML = state.auditLogs.map((entry) => `
+				<div class="rounded-2xl bg-white/5 px-4 py-3">${escapeHtml(entry.timestamp)} | ${escapeHtml(entry.action)} | ${escapeHtml(entry.details)}</div>
+			`).join('');
+		}
+
+		function renderRegistrarQueue() {
+			elements.pendingApprovalsCount.textContent = String(state.queue.filter((request) => request.status === 'Pending').length);
 
 			if (!state.queue.length) {
 				elements.queueBody.innerHTML = `
@@ -572,19 +699,25 @@
 				return;
 			}
 
-			elements.queueBody.innerHTML = state.queue.map((request) => `
-				<tr data-request-row="${request.id}" class="transition hover:bg-slate-50/80">
-					<td class="py-4 pr-4 font-semibold text-slate-900">${request.id}</td>
-					<td class="py-4 pr-4">${request.applicant}</td>
-					<td class="py-4 pr-4">${request.asset}</td>
-					<td class="py-4 pr-4">
+			elements.queueBody.innerHTML = state.queue.map((request) => {
+				const actionButtons = request.status === 'Pending'
+					? `
 						<div class="flex flex-wrap gap-2">
-							<button data-action="review" data-request-id="${request.id}" class="rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-900 transition hover:bg-blue-100">Review Docs</button>
-							<button data-action="approve" data-request-id="${request.id}" class="rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-emerald-800">Approve &amp; Sign</button>
+							<button data-action="reject" data-request-id="${escapeHtml(request.request_id)}" class="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100">Reject</button>
+							<button data-action="approve" data-request-id="${escapeHtml(request.request_id)}" class="rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-emerald-800">Approve</button>
 						</div>
-					</td>
-				</tr>
-			`).join('');
+					`
+					: `<span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">${escapeHtml(request.status)}</span>`;
+
+				return `
+					<tr class="transition hover:bg-slate-50/80">
+						<td class="py-4 pr-4 font-semibold text-slate-900">${escapeHtml(request.request_id)}</td>
+						<td class="py-4 pr-4">${escapeHtml(request.owner_name)}</td>
+						<td class="py-4 pr-4">${escapeHtml(request.asset_id)} • ${escapeHtml(request.property_type)} • ${escapeHtml(request.area)} • ${escapeHtml(request.location)}</td>
+						<td class="py-4 pr-4">${actionButtons}</td>
+					</tr>
+				`;
+			}).join('');
 		}
 
 		function showOverlay(title, subtitle) {
@@ -599,41 +732,124 @@
 			elements.overlay.classList.remove('opacity-100');
 		}
 
+		function setMutationButtonLoading(isLoading) {
+			elements.submitMutationBtn.disabled = isLoading;
+			elements.submitMutationBtn.classList.toggle('opacity-90', isLoading);
+			elements.submitMutationBtn.classList.toggle('cursor-wait', isLoading);
+			elements.submitMutationBtn.querySelector('.btn-label').textContent = isLoading ? 'Submitting...' : 'Submit Registration Request';
+			elements.submitMutationBtn.querySelector('.btn-spinner').classList.toggle('hidden', !isLoading);
+		}
+
+		async function fetchJson(path, options = {}) {
+			const response = await fetch(`${API_BASE}${path}`, {
+				headers: {
+					'Content-Type': 'application/json',
+					...(options.headers || {})
+				},
+				...options
+			});
+
+			const payload = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				throw new Error(payload.detail || payload.message || `Request failed with status ${response.status}`);
+			}
+			return payload;
+		}
+
+		async function loadCitizenDashboard() {
+			state.loadingCitizen = true;
+			try {
+				const payload = await fetchJson('/api/citizen/assets');
+				state.assets = Array.isArray(payload.assets) ? payload.assets : [];
+				state.requests = Array.isArray(payload.requests) ? payload.requests : [];
+				ensureCitizenRequestsWidget();
+				renderCitizenAssets();
+				renderCitizenRequests();
+			} catch (error) {
+				showToast(error.message, 'error');
+			} finally {
+				state.loadingCitizen = false;
+			}
+		}
+
+		async function loadRegistrarDashboard() {
+			state.loadingRegistrar = true;
+			try {
+				const payload = await fetchJson('/api/registrar/dashboard');
+				state.queue = Array.isArray(payload.queue) ? payload.queue : [];
+				state.auditLogs = Array.isArray(payload.audit_logs) ? payload.audit_logs : [];
+				renderRegistrarQueue();
+				renderAuditLogs();
+			} catch (error) {
+				showToast(error.message, 'error');
+			} finally {
+				state.loadingRegistrar = false;
+			}
+		}
+
 		async function handleMutationSubmit(event) {
 			event.preventDefault();
-			if (state.isSubmittingMutation) {
+			if (state.submittingMutation) {
 				return;
 			}
 
-			state.isSubmittingMutation = true;
-			elements.submitMutationBtn.disabled = true;
-			elements.submitMutationBtn.classList.add('opacity-90', 'cursor-wait');
-			elements.submitMutationBtn.querySelector('.btn-label').textContent = 'Submitting...';
-			elements.submitMutationBtn.querySelector('.btn-spinner').classList.remove('hidden');
+			const formData = new FormData(elements.mutationForm);
+			const landId = String(formData.get('landId') || '').trim();
+			const ownerName = String(formData.get('ownerName') || '').trim();
+			const wallet = String(formData.get('wallet') || '').trim();
+			const valuation = String(formData.get('valuation') || '').trim();
+
+			if (!landId || !ownerName || !wallet || !valuation) {
+				showToast('Fill all mutation form fields before submitting.', 'error');
+				return;
+			}
+
+			state.submittingMutation = true;
+			setMutationButtonLoading(true);
 			elements.mutationSuccess.classList.add('hidden');
 
-			await delay(1000);
-
-			elements.submitMutationBtn.disabled = false;
-			elements.submitMutationBtn.classList.remove('opacity-90', 'cursor-wait');
-			elements.submitMutationBtn.querySelector('.btn-label').textContent = 'Submit Registration Request';
-			elements.submitMutationBtn.querySelector('.btn-spinner').classList.add('hidden');
-			elements.mutationSuccess.classList.remove('hidden');
-			showToast('Mutation request submitted successfully.', 'success');
-			state.isSubmittingMutation = false;
+			try {
+				await fetchJson('/api/citizen/mutate', {
+					method: 'POST',
+					body: JSON.stringify({
+						asset_id: landId,
+						owner_name: ownerName,
+						property_type: 'Land Parcel',
+						area: valuation,
+						location: wallet
+					})
+				});
+				elements.mutationSuccess.classList.remove('hidden');
+				showToast('Mutation request submitted successfully.', 'success');
+				elements.mutationForm.reset();
+				await loadCitizenDashboard();
+				await loadRegistrarDashboard();
+			} catch (error) {
+				showToast(error.message, 'error');
+			} finally {
+				state.submittingMutation = false;
+				setMutationButtonLoading(false);
+			}
 		}
 
-		async function approveRequest(requestId) {
-			showOverlay('Generating Cryptographic Block Signature...', 'Sealing request and writing approval to the ledger.');
-			await delay(1000);
-			hideOverlay();
-			state.queue = state.queue.filter((request) => request.id !== requestId);
-			renderQueue();
-			showToast(`Request ${requestId} approved and sealed on-chain.`, 'success');
-		}
-
-		function reviewRequest(requestId) {
-			showToast(`Document review opened for ${requestId}.`, 'info');
+		async function handleRegistrarAction(requestId, status) {
+			showOverlay(status === 'Approved' ? 'Approving request...' : 'Rejecting request...', 'Sending registrar decision to the backend.');
+			try {
+				await fetchJson(`/api/registrar/action/${encodeURIComponent(requestId)}`, {
+					method: 'POST',
+					body: JSON.stringify({
+						status,
+						comments: status === 'Approved' ? 'Approved from registrar dashboard.' : 'Rejected from registrar dashboard.'
+					})
+				});
+				showToast(`Request ${requestId} ${status.toLowerCase()} successfully.`, 'success');
+				await loadRegistrarDashboard();
+				await loadCitizenDashboard();
+			} catch (error) {
+				showToast(error.message, 'error');
+			} finally {
+				hideOverlay();
+			}
 		}
 
 		document.addEventListener('click', async (event) => {
@@ -647,12 +863,14 @@
 			if (citizenButton) {
 				setActiveScreen('citizen');
 				setCitizenTab('assets');
+				await loadCitizenDashboard();
 				return;
 			}
 
 			const registrarButton = event.target.closest('#openRegistrarBtn');
 			if (registrarButton) {
 				setActiveScreen('registrar');
+				await loadRegistrarDashboard();
 				return;
 			}
 
@@ -665,23 +883,25 @@
 			const actionButton = event.target.closest('[data-action]');
 			if (actionButton) {
 				const requestId = actionButton.dataset.requestId;
-				if (actionButton.dataset.action === 'approve') {
+				const action = actionButton.dataset.action;
+				if (action === 'approve' || action === 'reject') {
 					actionButton.disabled = true;
-					await approveRequest(requestId);
+					await handleRegistrarAction(requestId, action === 'approve' ? 'Approved' : 'Rejected');
 					return;
-				}
-				if (actionButton.dataset.action === 'review') {
-					reviewRequest(requestId);
 				}
 			}
 		});
 
 		elements.mutationForm.addEventListener('submit', handleMutationSubmit);
 
-		elements.dateDisplay.textContent = formatDate();
-		setActiveScreen('main');
-		setCitizenTab('assets');
-		renderQueue();
+		(async function bootstrap() {
+			elements.dateDisplay.textContent = formatDate();
+			setActiveScreen('main');
+			setCitizenTab('assets');
+			ensureCitizenRequestsWidget();
+			await Promise.all([loadCitizenDashboard(), loadRegistrarDashboard()]);
+		})();
 	</script>
 </body>
 </html>
+
