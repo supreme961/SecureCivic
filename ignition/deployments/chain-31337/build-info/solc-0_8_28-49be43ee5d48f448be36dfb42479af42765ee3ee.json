@@ -1,0 +1,49 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-49be43ee5d48f448be36dfb42479af42765ee3ee",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "compilerType": "solc",
+  "toolVersions": {
+    "hardhat": "3.9.1"
+  },
+  "userSourceNameMap": {
+    "contracts/LandRegistry.sol": "project/contracts/LandRegistry.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode.linkReferences",
+            "evm.bytecode.object",
+            "evm.bytecode.opcodes",
+            "evm.bytecode.sourceMap",
+            "evm.deployedBytecode.immutableReferences",
+            "evm.deployedBytecode.linkReferences",
+            "evm.deployedBytecode.object",
+            "evm.deployedBytecode.opcodes",
+            "evm.deployedBytecode.sourceMap",
+            "evm.methodIdentifiers"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/LandRegistry.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.20;\r\n\r\ncontract LandRegistry {\r\n    \r\n    struct Land {\r\n        uint256 id;\r\n        string location;\r\n        uint256 area;\r\n        address owner;\r\n        bool isForSale;\r\n    }\r\n\r\n    // Land ID se Land ki details map karne ke liye\r\n    mapping(uint256 => Land) public lands;\r\n\r\n    // Land register karne ka function\r\n    function registerLand(uint256 _id, string memory _location, uint256 _area) public {\r\n        require(lands[_id].id == 0, \"Land already registered!\");\r\n        \r\n        lands[_id] = Land({\r\n            id: _id,\r\n            location: _location,\r\n            area: _area,\r\n            owner: msg.sender,\r\n            isForSale: false\r\n        });\r\n    }\r\n}"
+      }
+    }
+  }
+}

@@ -6,6 +6,47 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from web3 import Web3
+
+# 1. Local Hardhat Blockchain se connect karo
+w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+
+# 2. Jo address hume mila tha deployment par (db786f39-4441-4765-ad5b-5e7094ccdb8c)
+contract_address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+
+# 3. Aapke LandRegistry contract ki ABI
+contract_abi = [
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "_id", "type": "uint256"},
+            {"internalType": "string", "name": "_location", "type": "string"},
+            {"internalType": "uint256", "name": "_area", "type": "uint256"}
+        ],
+        "name": "registerLand",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "name": "lands",
+        "outputs": [
+            {"internalType": "uint256", "name": "id", "type": "uint256"},
+            {"internalType": "string", "name": "location", "type": "string"},
+            {"internalType": "uint256", "name": "area", "type": "uint256"},
+            {"internalType": "address", "name": "owner", "type": "address"},
+            {"internalType": "bool", "name": "isForSale", "type": "bool"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]
+
+# 4. Contract instance banao
+contract = w3.eth.contract(address=contract_address, abi=contract_abi)
+
+# 5. Tx send karne ke liye default account set karo (Hardhat ka pehla dummy account)
+w3.eth.default_account = w3.eth.accounts[0]
 
 app = FastAPI(
 	title="SecureCivic Land Registry API",
@@ -35,6 +76,12 @@ class MutationRequest(BaseModel):
 class ApprovalAction(BaseModel):
 	status: Literal["Approved", "Rejected"] = Field(..., description="Registrar decision")
 	comments: str = Field("", description="Registrar notes for the decision")
+
+
+class LandRegistrationRequest(BaseModel):
+	asset_id: int = Field(..., description="Land asset identifier")
+	location: str = Field(..., min_length=1, description="Land location")
+	area: int = Field(..., description="Land area")
 
 
 def utc_now() -> str:
@@ -202,3 +249,29 @@ def registrar_action(request_id: str, action: ApprovalAction) -> dict:
 		"request": request_record,
 		"asset_status": asset_status,
 	}
+
+
+@app.post("/register-land/")
+def register_land(payload: LandRegistrationRequest) -> dict:
+	tx_hash = contract.functions.registerLand(
+		payload.asset_id,
+		payload.location,
+		payload.area,
+	).transact()
+	w3.eth.wait_for_transaction_receipt(tx_hash)
+	return {"tx_hash": tx_hash.hex()}
+
+
+@app.get("/get-land/{land_id}")
+def get_land(land_id: int) -> dict:
+	land = contract.functions.lands(land_id).call()
+	land_record = {
+		"id": int(land[0]),
+		"location": land[1],
+		"area": int(land[2]),
+		"owner": land[3],
+		"is_for_sale": land[4],
+	}
+	if land_record["id"] == 0:
+		raise HTTPException(status_code=404, detail="Land not found")
+	return land_record
