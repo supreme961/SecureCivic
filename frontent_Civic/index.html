@@ -318,6 +318,7 @@
 										<div class="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-900 text-2xl text-white shadow-lg shadow-blue-900/10">📄</div>
 										<p class="text-sm font-semibold text-slate-900">Drag and drop documents here</p>
 										<p class="mt-1 text-sm text-slate-500">Sale deed, Khatian, utility proof, and supporting maps</p>
+										<input type="file" name="document" id="documentInput" class="mt-2 text-xs" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*">
 										<span class="mt-4 inline-flex rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-900">PDF, JPG, PNG</span>
 									</div>
 								</div>
@@ -740,6 +741,35 @@
 			elements.submitMutationBtn.querySelector('.btn-spinner').classList.toggle('hidden', !isLoading);
 		}
 
+			function normalizeIpfsResponse(payload) {
+				return {
+					ipfsHash: payload.IpfsHash || payload.ipfs_hash || payload.hash || '',
+					gatewayUrl: payload.gateway_url || payload.gatewayUrl || ''
+				};
+			}
+
+			async function uploadDocumentToIpfs(file) {
+				const uploadFormData = new FormData();
+				uploadFormData.append('document', file);
+
+				const response = await fetch(`${API_BASE}/upload-document/`, {
+					method: 'POST',
+					body: uploadFormData
+				});
+
+				const payload = await response.json().catch(() => ({}));
+				if (!response.ok) {
+					throw new Error(payload.detail || payload.message || 'Document upload to IPFS failed.');
+				}
+
+				const ipfsInfo = normalizeIpfsResponse(payload);
+				if (!ipfsInfo.ipfsHash && !ipfsInfo.gatewayUrl) {
+					throw new Error('IPFS upload completed without a usable hash or gateway URL.');
+				}
+
+				return ipfsInfo;
+			}
+
 		async function fetchJson(path, options = {}) {
 			const response = await fetch(`${API_BASE}${path}`, {
 				headers: {
@@ -794,21 +824,30 @@
 			}
 
 			const formData = new FormData(elements.mutationForm);
+				const documentInput = document.getElementById('documentInput');
 			const landId = String(formData.get('landId') || '').trim();
 			const ownerName = String(formData.get('ownerName') || '').trim();
 			const wallet = String(formData.get('wallet') || '').trim();
 			const valuation = String(formData.get('valuation') || '').trim();
+				const documentFile = documentInput && documentInput.files ? documentInput.files[0] : null;
 
 			if (!landId || !ownerName || !wallet || !valuation) {
 				showToast('Fill all mutation form fields before submitting.', 'error');
 				return;
 			}
 
+				if (!documentFile) {
+					showToast('Select a document before submitting the mutation request.', 'error');
+					return;
+				}
+
 			state.submittingMutation = true;
 			setMutationButtonLoading(true);
 			elements.mutationSuccess.classList.add('hidden');
 
 			try {
+					const ipfsInfo = await uploadDocumentToIpfs(documentFile);
+					const ipfsComment = 'IPFS document uploaded: ' + (ipfsInfo.ipfsHash || 'n/a') + (ipfsInfo.gatewayUrl ? ' | ' + ipfsInfo.gatewayUrl : '');
 				await fetchJson('/api/citizen/mutate', {
 					method: 'POST',
 					body: JSON.stringify({
@@ -816,11 +855,18 @@
 						owner_name: ownerName,
 						property_type: 'Land Parcel',
 						area: valuation,
-						location: wallet
+							location: wallet,
+							comments: ipfsComment,
+							document_ipfs: {
+								ipfs_hash: ipfsInfo.ipfsHash,
+								gateway_url: ipfsInfo.gatewayUrl,
+								filename: documentFile.name,
+								content_type: documentFile.type
+							}
 					})
 				});
 				elements.mutationSuccess.classList.remove('hidden');
-				showToast('Mutation request submitted successfully.', 'success');
+					showToast('Mutation request and document upload submitted successfully.', 'success');
 				elements.mutationForm.reset();
 				await loadCitizenDashboard();
 				await loadRegistrarDashboard();
