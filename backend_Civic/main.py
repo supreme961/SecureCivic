@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from web3 import Web3
+from web3.exceptions import ContractLogicError
 
 # 1. Local Hardhat Blockchain se connect karo
 w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
@@ -199,6 +200,52 @@ def find_asset(property_id: str) -> dict | None:
 	return None
 
 
+def get_registrar_account() -> tuple[object, str]:
+	registrar_private_key = os.getenv("REGISTRAR_PRIVATE_KEY", "").strip().replace("\\n", "").replace("\\r", "")
+	if not registrar_private_key:
+		raise HTTPException(status_code=500, detail="REGISTRAR_PRIVATE_KEY is not configured")
+
+	try:
+		registrar_account = w3.eth.account.from_key(registrar_private_key)
+	except Exception as exc:
+		raise HTTPException(status_code=500, detail=f"Invalid registrar private key: {exc}") from exc
+
+	return registrar_account, registrar_private_key
+
+
+def build_seal_transaction(request_record: dict, registrar_address: str) -> dict:
+	contract_functions = contract.functions
+	if hasattr(contract_functions, "approveMutation"):
+		contract_call = contract_functions.approveMutation(request_record["request_id"])
+	elif hasattr(contract_functions, "mintLandRecord"):
+		contract_call = contract_functions.mintLandRecord(
+			request_record["request_id"],
+			request_record["asset_id"],
+			request_record["owner_name"],
+			request_record["location"],
+		)
+	else:
+		contract_call = contract_functions.registerLand(
+			int(request_record["asset_id"].split("-")[-1]) if isinstance(request_record["asset_id"], str) and request_record["asset_id"].split("-")[-1].isdigit() else 1,
+			request_record["location"],
+			int(float(str(request_record["area"]).split()[0])) if str(request_record["area"]).replace(".", "", 1).isdigit() or str(request_record["area"]).split()[0].replace(".", "", 1).isdigit() else 1,
+		)
+
+	nonce = w3.eth.get_transaction_count(registrar_address)
+	base_tx = contract_call.build_transaction(
+		{
+			"from": registrar_address,
+			"nonce": nonce,
+			"chainId": w3.eth.chain_id,
+		}
+	)
+	if "gas" not in base_tx:
+		base_tx["gas"] = w3.eth.estimate_gas(base_tx)
+	if "gasPrice" not in base_tx and "maxFeePerGas" not in base_tx:
+		base_tx["gasPrice"] = w3.eth.gas_price
+	return base_tx
+
+
 def get_pinata_error_message(response: requests.Response | None, fallback: str) -> str:
 	if response is None:
 		return fallback
@@ -330,6 +377,26 @@ def registrar_action(request_id: str, action: ApprovalAction) -> dict:
 	elif action.status == "Rejected" and asset_record is not None:
 		asset_status = asset_record["status"]
 
+	blockchain_tx_hash = None
+	if action.status == "Approved":
+		try:
+			registrar_account, registrar_private_key = get_registrar_account()
+			tx_payload = build_seal_transaction(request_record, registrar_account.address)
+			signed_transaction = registrar_account.sign_transaction(tx_payload)
+			tx_hash = w3.eth.send_raw_transaction(signed_transaction.raw_transaction)
+			receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+			blockchain_tx_hash = tx_hash.hex()
+			log_audit(
+				action="Blockchain record sealed",
+				details=(
+					f"{request_id} sealed on-chain by registrar {registrar_account.address} with tx {blockchain_tx_hash}. "
+					f"Block {receipt.blockNumber} confirmed."
+				),
+			)
+		except (ValueError, ContractLogicError, Exception) as exc:
+			traceback.print_exc()
+			raise HTTPException(status_code=500, detail=f"Blockchain sealing failed: {exc}") from exc
+
 	log_audit(
 		action=f"Mutation request {action.status.lower()}",
 		details=f"{request_id} was {action.status.lower()} by registrar. Comments: {action.comments or 'No comments provided.'}",
@@ -340,6 +407,7 @@ def registrar_action(request_id: str, action: ApprovalAction) -> dict:
 		"message": f"Request {request_id} {action.status.lower()} successfully.",
 		"request": request_record,
 		"asset_status": asset_status,
+		"blockchain_tx_hash": blockchain_tx_hash,
 	}
 
 
