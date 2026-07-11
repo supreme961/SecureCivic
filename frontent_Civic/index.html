@@ -298,19 +298,19 @@
 							<form id="mutationForm" class="grid gap-4 lg:grid-cols-2">
 								<label class="space-y-2 lg:col-span-1">
 									<span class="text-sm font-semibold text-slate-700">Land ID / Survey No</span>
-									<input class="field" type="text" name="landId" placeholder="LS-44/25">
+									<input class="field" type="text" name="landId" placeholder="LS-44/25" required minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_\-/]*" title="Use only letters, numbers, hyphens, underscores, or slashes with no spaces.">
 								</label>
 								<label class="space-y-2 lg:col-span-1">
 									<span class="text-sm font-semibold text-slate-700">Owner Full Name</span>
-									<input class="field" type="text" name="ownerName" placeholder="Shrestha Devi">
+									<input class="field" type="text" name="ownerName" placeholder="Shrestha Devi" required minlength="2" maxlength="80">
 								</label>
 								<label class="space-y-2 lg:col-span-1">
 									<span class="text-sm font-semibold text-slate-700">Aadhaar / Wallet Public Address</span>
-									<input class="field" type="text" name="wallet" placeholder="0xB4A1...9C22 or 1234 5678 9012">
+									<input class="field" type="text" name="wallet" placeholder="0xB4A1...9C22 or 1234 5678 9012" required minlength="6" maxlength="80" pattern="[A-Za-z0-9xX_\-\/]+" title="Use only letters, numbers, or common address separators with no spaces.">
 								</label>
 								<label class="space-y-2 lg:col-span-1">
 									<span class="text-sm font-semibold text-slate-700">Land Valuation (INR)</span>
-									<input class="field" type="number" name="valuation" placeholder="1850000">
+									<input class="field" type="number" name="valuation" placeholder="1850000" required min="1" step="1" inputmode="numeric">
 								</label>
 								<div class="space-y-2 lg:col-span-2">
 									<span class="text-sm font-semibold text-slate-700">Document Upload</span>
@@ -318,7 +318,7 @@
 										<div class="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-900 text-2xl text-white shadow-lg shadow-blue-900/10">📄</div>
 										<p class="text-sm font-semibold text-slate-900">Drag and drop documents here</p>
 										<p class="mt-1 text-sm text-slate-500">Sale deed, Khatian, utility proof, and supporting maps</p>
-										<input type="file" name="document" id="documentInput" class="mt-2 text-xs" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*">
+												<input type="file" name="document" id="documentInput" class="mt-2 text-xs" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" required>
 										<span class="mt-4 inline-flex rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-900">PDF, JPG, PNG</span>
 									</div>
 								</div>
@@ -357,21 +357,22 @@
 									</div>
 									<p class="mt-1 text-sm text-slate-600">Field-level verification has been successfully recorded.</p>
 								</div>
-								<div class="relative rounded-2xl border border-slate-200 bg-slate-50 p-4">
-									<div class="absolute -left-[2.125rem] top-5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-sm font-bold text-white shadow-lg shadow-slate-900/10">3</div>
+								<div id="trackerStep3" class="relative rounded-2xl border border-slate-200 bg-slate-50 p-4">
+									<div id="trackerStep3Badge" class="absolute -left-[2.125rem] top-5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-sm font-bold text-white shadow-lg shadow-slate-900/10">3</div>
 									<div class="flex items-center justify-between gap-3">
 										<h4 class="font-bold text-slate-950">Step 3: Registrar Digital Signature</h4>
-										<span class="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">Pending</span>
+										<span id="trackerStep3Status" class="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">Pending</span>
 									</div>
-									<p class="mt-1 text-sm text-slate-600">Awaiting registrar review and on-chain approval.</p>
+									<p id="trackerStep3Description" class="mt-1 text-sm text-slate-600">Awaiting registrar review and on-chain approval.</p>
 								</div>
-								<div class="relative rounded-2xl border border-slate-200 bg-slate-50 p-4">
-									<div class="absolute -left-[2.125rem] top-5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-sm font-bold text-white shadow-lg shadow-slate-900/10">4</div>
+								<div id="trackerStep4" class="relative rounded-2xl border border-slate-200 bg-slate-50 p-4">
+									<div id="trackerStep4Badge" class="absolute -left-[2.125rem] top-5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-sm font-bold text-white shadow-lg shadow-slate-900/10">4</div>
 									<div class="flex items-center justify-between gap-3">
 										<h4 class="font-bold text-slate-950">Step 4: Block Minting & Ledger Update</h4>
-										<span class="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">Pending</span>
+										<span id="trackerStep4Status" class="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">Pending</span>
 									</div>
-									<p class="mt-1 text-sm text-slate-600">Final ledger mutation will be sealed after signature.</p>
+									<p id="trackerStep4Description" class="mt-1 text-sm text-slate-600">Final ledger mutation will be sealed after signature.</p>
+									<p id="trackerStep4Hash" class="mt-2 hidden rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"></p>
 								</div>
 							</div>
 						</div>
@@ -485,7 +486,9 @@
 			auditLogs: [],
 			loadingCitizen: false,
 			loadingRegistrar: false,
-			submittingMutation: false
+			submittingMutation: false,
+			lastMutationTxHash: '',
+			lastMutationRequestId: ''
 		};
 
 		const elements = {
@@ -506,7 +509,8 @@
 			mutationSuccess: document.getElementById('mutationSuccess'),
 			assetTableBody: document.querySelector('[data-citizen-panel="assets"] tbody'),
 			trackerPanel: document.querySelector('[data-citizen-panel="tracker"]'),
-			auditTerminalBody: document.querySelector('.audit-terminal .space-y-3')
+			auditTerminalBody: document.querySelector('.audit-terminal .space-y-3'),
+			trackerStep4Hash: document.getElementById('trackerStep4Hash')
 		};
 
 		function formatDate() {
@@ -526,6 +530,46 @@
 				.replaceAll('"', '&quot;')
 				.replaceAll("'", '&#39;');
 		}
+
+			function isTrimmed(value) {
+				return typeof value === 'string' && value === value.trim();
+			}
+
+			function isStrictIdentifier(value) {
+				return /^[A-Za-z0-9][A-Za-z0-9_\-/]*$/.test(value);
+			}
+
+			function validateMutationForm(formElement) {
+				const fields = {
+					landId: String(formElement.elements.landId?.value || ''),
+					ownerName: String(formElement.elements.ownerName?.value || ''),
+					wallet: String(formElement.elements.wallet?.value || ''),
+					valuation: String(formElement.elements.valuation?.value || '')
+				};
+
+				if (!fields.landId || !fields.ownerName || !fields.wallet || !fields.valuation) {
+					return 'Fill all mutation form fields before submitting.';
+				}
+
+				if (!isTrimmed(fields.landId) || !isTrimmed(fields.ownerName) || !isTrimmed(fields.wallet) || !isTrimmed(fields.valuation)) {
+					return 'Remove leading or trailing spaces from every field before submitting.';
+				}
+
+				if (!isStrictIdentifier(fields.landId)) {
+					return 'Land ID must use only letters, numbers, hyphens, underscores, or slashes and contain no spaces.';
+				}
+
+				if (!isStrictIdentifier(fields.wallet.replace(/^0x/i, '0x').replace(/\s+/g, ''))) {
+					return 'Wallet or Aadhaar reference must be an alphanumeric identifier without spaces.';
+				}
+
+				const valuationNumber = Number(fields.valuation);
+				if (!Number.isFinite(valuationNumber) || valuationNumber <= 0) {
+					return 'Land valuation must be a positive number.';
+				}
+
+				return '';
+			}
 
 		function showToast(message, type = 'success') {
 			const toast = document.createElement('div');
@@ -620,6 +664,72 @@
 			}
 
 			return '<span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">' + escapeHtml(status) + '</span>';
+		}
+
+		function isTrackerSuccessState() {
+			return state.requests.some((request) => request.status === 'Approved' || request.status === 'Verified');
+		}
+
+		function renderApplicationTracker() {
+			const isComplete = isTrackerSuccessState();
+			const transactionHash = state.lastMutationTxHash || '';
+			const stepElements = [
+				{
+					container: document.getElementById('trackerStep3'),
+					badge: document.getElementById('trackerStep3Badge'),
+					status: document.getElementById('trackerStep3Status'),
+					description: document.getElementById('trackerStep3Description'),
+					defaultBadge: '3',
+					defaultStatus: 'Pending',
+					defaultDescription: 'Awaiting registrar review and on-chain approval.'
+				},
+				{
+					container: document.getElementById('trackerStep4'),
+					badge: document.getElementById('trackerStep4Badge'),
+					status: document.getElementById('trackerStep4Status'),
+					description: document.getElementById('trackerStep4Description'),
+					hash: elements.trackerStep4Hash,
+					defaultBadge: '4',
+					defaultStatus: 'Pending',
+					defaultDescription: 'Final ledger mutation will be sealed after signature.'
+				}
+			];
+
+			stepElements.forEach(({ container, badge, status, description, hash, defaultBadge, defaultStatus, defaultDescription }) => {
+				if (!container || !badge || !status || !description) {
+					return;
+				}
+
+				container.classList.toggle('border-slate-200', !isComplete);
+				container.classList.toggle('border-emerald-200', isComplete);
+				container.classList.toggle('bg-emerald-50/80', isComplete);
+				container.classList.toggle('bg-slate-50', !isComplete);
+				badge.className = isComplete
+					? 'absolute -left-[2.125rem] top-5 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white shadow-lg shadow-emerald-900/10'
+					: 'absolute -left-[2.125rem] top-5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-sm font-bold text-white shadow-lg shadow-slate-900/10';
+				badge.textContent = isComplete ? '✓' : defaultBadge;
+				const isVerifiedStep = isComplete && Boolean(transactionHash) && status.id === 'trackerStep4Status';
+				status.className = isComplete
+					? 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800'
+					: 'rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700';
+				if (status.id === 'trackerStep3Status') {
+					status.textContent = isComplete ? 'Completed' : defaultStatus;
+				} else {
+					status.textContent = isVerifiedStep ? 'Verified' : isComplete ? 'Completed' : defaultStatus;
+				}
+				description.textContent = isComplete
+					? 'The registrar decision is complete and the ledger has been updated successfully.'
+					: defaultDescription;
+				if (hash) {
+					if (isVerifiedStep) {
+						hash.textContent = `Blockchain transaction hash: ${transactionHash}`;
+						hash.classList.remove('hidden');
+					} else {
+						hash.textContent = '';
+						hash.classList.add('hidden');
+					}
+				}
+			});
 		}
 
 		function renderCitizenAssets() {
@@ -792,9 +902,13 @@
 				const payload = await fetchJson('/api/citizen/assets');
 				state.assets = Array.isArray(payload.assets) ? payload.assets : [];
 				state.requests = Array.isArray(payload.requests) ? payload.requests : [];
+				if (state.requests.some((request) => request.status === 'Approved' || request.status === 'Verified')) {
+					state.lastMutationRequestId = state.requests.find((request) => request.status === 'Approved' || request.status === 'Verified')?.request_id || state.lastMutationRequestId;
+				}
 				ensureCitizenRequestsWidget();
 				renderCitizenAssets();
 				renderCitizenRequests();
+				renderApplicationTracker();
 			} catch (error) {
 				showToast(error.message, 'error');
 			} finally {
@@ -831,8 +945,15 @@
 			const valuation = String(formData.get('valuation') || '').trim();
 				const documentFile = documentInput && documentInput.files ? documentInput.files[0] : null;
 
-			if (!landId || !ownerName || !wallet || !valuation) {
-				showToast('Fill all mutation form fields before submitting.', 'error');
+			if (!elements.mutationForm.checkValidity()) {
+				elements.mutationForm.reportValidity();
+				return;
+			}
+
+			const validationMessage = validateMutationForm(elements.mutationForm);
+			if (validationMessage) {
+				elements.mutationForm.reportValidity();
+				showToast(validationMessage, 'error');
 				return;
 			}
 
@@ -898,6 +1019,108 @@
 			}
 		}
 
+		async function refreshRegistrarDashboards() {
+			try {
+				if (typeof loadRegistrarDashboard === 'function' && typeof loadCitizenDashboard === 'function') {
+					await Promise.all([loadRegistrarDashboard(), loadCitizenDashboard()]);
+					return;
+				}
+			} catch (error) {
+				console.error(error);
+			}
+
+			window.location.reload();
+		}
+
+		elements.queueBody.addEventListener('click', async (event) => {
+			const actionButton = event.target.closest('[data-action="approve"], [data-action="reject"]');
+			if (!actionButton || !elements.queueBody.contains(actionButton)) {
+				return;
+			}
+
+			const requestId = actionButton.dataset.requestId;
+			const action = actionButton.dataset.action;
+			if (!requestId || (action !== 'approve' && action !== 'reject')) {
+				return;
+			}
+
+			const status = action === 'approve' ? 'Approved' : 'Rejected';
+			if (status === 'Approved') {
+				const confirmed = window.confirm('Warning: This action is non-reversible and will permanently write to the blockchain ledger. Proceed?');
+				if (!confirmed) {
+					return;
+				}
+			}
+			const comments = window.prompt(`Enter reason for ${status.toLowerCase()}`, '');
+			if (comments === null) {
+				return;
+			}
+
+			actionButton.disabled = true;
+			showOverlay(status === 'Approved' ? 'Approving request...' : 'Rejecting request...', 'Sending registrar decision to the backend.');
+
+			try {
+				const response = await fetch(`${API_BASE}/api/registrar/action/${encodeURIComponent(requestId)}`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						status,
+						comments
+					})
+				});
+
+				const payload = await response.json().catch(() => ({}));
+				if (!response.ok) {
+					throw new Error(payload.detail || payload.message || `Request failed with status ${response.status}`);
+				}
+
+				const statusText = String(payload.request?.status || status);
+				const updatedRequest = payload.request || {};
+				const blockchainTxHash = payload.blockchain_tx_hash || '';
+
+				state.requests = state.requests.map((request) => (
+					request.request_id === requestId
+						? {
+							...request,
+							...updatedRequest,
+							status: statusText,
+							updated_at: updatedRequest.updated_at || new Date().toISOString(),
+							blockchain_tx_hash: blockchainTxHash
+						}
+						: request
+				));
+				state.queue = state.queue.map((request) => (
+					request.request_id === requestId
+						? {
+							...request,
+							...updatedRequest,
+							status: statusText,
+							updated_at: updatedRequest.updated_at || new Date().toISOString(),
+							blockchain_tx_hash: blockchainTxHash
+						}
+						: request
+				));
+
+				if (status === 'Approved' && blockchainTxHash) {
+					state.lastMutationRequestId = requestId;
+					state.lastMutationTxHash = blockchainTxHash;
+				}
+
+				renderCitizenRequests();
+				renderApplicationTracker();
+				renderRegistrarQueue();
+				showToast(`Request ${requestId} ${status.toLowerCase()} successfully.`, 'success');
+				await refreshRegistrarDashboards();
+			} catch (error) {
+				showToast(error.message, 'error');
+			} finally {
+				actionButton.disabled = false;
+				hideOverlay();
+			}
+		});
+
 		document.addEventListener('click', async (event) => {
 			const backButton = event.target.closest('[data-back-to-main]');
 			if (backButton) {
@@ -925,17 +1148,6 @@
 				setCitizenTab(tabButton.dataset.citizenTab);
 				return;
 			}
-
-			const actionButton = event.target.closest('[data-action]');
-			if (actionButton) {
-				const requestId = actionButton.dataset.requestId;
-				const action = actionButton.dataset.action;
-				if (action === 'approve' || action === 'reject') {
-					actionButton.disabled = true;
-					await handleRegistrarAction(requestId, action === 'approve' ? 'Approved' : 'Rejected');
-					return;
-				}
-			}
 		});
 
 		elements.mutationForm.addEventListener('submit', handleMutationSubmit);
@@ -945,6 +1157,7 @@
 			setActiveScreen('main');
 			setCitizenTab('assets');
 			ensureCitizenRequestsWidget();
+			renderApplicationTracker();
 			await Promise.all([loadCitizenDashboard(), loadRegistrarDashboard()]);
 		})();
 	</script>

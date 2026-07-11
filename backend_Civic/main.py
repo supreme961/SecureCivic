@@ -403,6 +403,8 @@ def registrar_action(request_id: str, action: ApprovalAction) -> dict:
 					f"Block {receipt.blockNumber} confirmed."
 				),
 			)
+		except HTTPException:
+			raise
 		except (ValueError, ContractLogicError, Exception) as exc:
 			traceback.print_exc()
 			log_audit(

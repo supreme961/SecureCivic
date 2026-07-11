@@ -1,6 +1,17 @@
 # Node modules
 /node_modules
 
+# Python bytecode and cache
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Local virtual environments
+venv/
+.venv/
+backend_Civic/venv/
+backend_Civic/.venv/
+
 # Compilation output
 /dist
 
@@ -9,6 +20,8 @@
 
 # Hardhat Build Artifacts
 /artifacts
+**/artifacts/
+hardhat/artifacts/
 
 # Hardhat compilation (v2) support directory
 /cache
@@ -19,6 +32,8 @@
 # Environment files
 .env
 .env.*
+backend_Civic/.env
+backend_Civic/.env.*
 !.env.example
 
 # Hardhat coverage reports

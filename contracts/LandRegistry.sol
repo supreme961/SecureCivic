@@ -13,6 +13,9 @@ contract LandRegistry {
 
     // Land ID se Land ki details map karne ke liye
     mapping(uint256 => Land) public lands;
+    mapping(string => bool) private processedMutations;
+
+    event MutationCompleted(string indexed requestId);
 
     // Land register karne ka function
     function registerLand(uint256 _id, string memory _location, uint256 _area) public {
@@ -25,5 +28,13 @@ contract LandRegistry {
             owner: msg.sender,
             isForSale: false
         });
+    }
+
+    function approveMutation(string memory requestId) public {
+        require(!processedMutations[requestId], "Mutation already processed!");
+
+        processedMutations[requestId] = true;
+
+        emit MutationCompleted(requestId);
     }
 }
