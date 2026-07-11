@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field
 from web3 import Web3
 from web3.exceptions import ContractLogicError
 
+DEFAULT_HARDHAT_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+
 # 1. Local Hardhat Blockchain se connect karo
 w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
 
@@ -203,7 +205,8 @@ def find_asset(property_id: str) -> dict | None:
 def get_registrar_account() -> tuple[object, str]:
 	registrar_private_key = os.getenv("REGISTRAR_PRIVATE_KEY", "").strip().replace("\\n", "").replace("\\r", "")
 	if not registrar_private_key:
-		raise HTTPException(status_code=500, detail="REGISTRAR_PRIVATE_KEY is not configured")
+		registrar_private_key = DEFAULT_HARDHAT_PRIVATE_KEY
+		print("WARNING: REGISTRAR_PRIVATE_KEY is not configured; using the local Hardhat default private key for development.")
 
 	try:
 		registrar_account = w3.eth.account.from_key(registrar_private_key)
@@ -360,22 +363,11 @@ def registrar_dashboard() -> dict:
 @app.post("/api/registrar/action/{request_id}")
 def registrar_action(request_id: str, action: ApprovalAction) -> dict:
 	request_record = find_request(request_id)
-	request_record["status"] = action.status
-	request_record["comments"] = action.comments
-	request_record["updated_at"] = utc_now()
+	if request_record["status"] != "Pending":
+		raise HTTPException(status_code=400, detail=f"Request {request_id} has already been processed.")
 
 	asset_record = find_asset(request_record["asset_id"])
 	asset_status = None
-	if action.status == "Approved" and asset_record is not None:
-		asset_record["status"] = "Verified"
-		asset_record["owner_name"] = request_record["owner_name"]
-		asset_record["property_type"] = request_record["property_type"]
-		asset_record["area"] = request_record["area"]
-		asset_record["location"] = request_record["location"]
-		asset_record["last_updated"] = utc_now()
-		asset_status = asset_record["status"]
-	elif action.status == "Rejected" and asset_record is not None:
-		asset_status = asset_record["status"]
 
 	blockchain_tx_hash = None
 	if action.status == "Approved":
@@ -384,8 +376,26 @@ def registrar_action(request_id: str, action: ApprovalAction) -> dict:
 			tx_payload = build_seal_transaction(request_record, registrar_account.address)
 			signed_transaction = registrar_account.sign_transaction(tx_payload)
 			tx_hash = w3.eth.send_raw_transaction(signed_transaction.raw_transaction)
+			if not tx_hash:
+				raise ValueError("Blockchain transaction hash was not returned")
 			receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+			if getattr(receipt, "status", 0) != 1:
+				raise ValueError("Blockchain transaction execution failed")
+
 			blockchain_tx_hash = tx_hash.hex()
+			request_record["status"] = "Approved"
+			request_record["comments"] = action.comments
+			request_record["updated_at"] = utc_now()
+
+			if asset_record is not None:
+				asset_record["status"] = "Verified"
+				asset_record["owner_name"] = request_record["owner_name"]
+				asset_record["property_type"] = request_record["property_type"]
+				asset_record["area"] = request_record["area"]
+				asset_record["location"] = request_record["location"]
+				asset_record["last_updated"] = utc_now()
+				asset_status = asset_record["status"]
+
 			log_audit(
 				action="Blockchain record sealed",
 				details=(
@@ -395,7 +405,18 @@ def registrar_action(request_id: str, action: ApprovalAction) -> dict:
 			)
 		except (ValueError, ContractLogicError, Exception) as exc:
 			traceback.print_exc()
+			log_audit(
+				action="Blockchain sealing failed",
+				details=f"{request_id} approval failed: {exc}",
+			)
 			raise HTTPException(status_code=500, detail=f"Blockchain sealing failed: {exc}") from exc
+	elif action.status == "Rejected":
+		request_record["status"] = "Rejected"
+		request_record["comments"] = action.comments
+		request_record["updated_at"] = utc_now()
+
+		if asset_record is not None:
+			asset_status = asset_record["status"]
 
 	log_audit(
 		action=f"Mutation request {action.status.lower()}",
